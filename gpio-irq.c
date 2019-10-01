@@ -10,8 +10,10 @@ static XScuGic_Config *GicConfig;    /* The configuration parameters of the */
  * the interrupt processing
  */
 volatile static int InterruptProcessed = 0;
-//volatile static int CallbackRef = 0;
-//volatile static int gd = 0;
+
+volatile static int isr_id[8] = {121,122,123,
+				 124,125,126,
+				 127,128};
 
 void DeviceDriverHandler(void *CallbackRef);
 int SetUpInterruptSystem(XScuGic *XScuGicInstancePtr);
@@ -75,9 +77,12 @@ void gpio_irq_test(void)
    */
   for (int i = 121; i <= 128; i++)
     {
+
+	  // Using the same handler body, but associating with different callback data
+	  // so that the handler will know which IRQ it is responsible for servicing
       Status = XScuGic_Connect(&InterruptController, i,
 			       (Xil_ExceptionHandler)DeviceDriverHandler,
-			       (void *)&InterruptController);
+			       (void*) &(isr_id[i-121]));
 
       if (Status != XST_SUCCESS) {
 	return XST_FAILURE;
@@ -151,7 +156,6 @@ void trigger_irq (int irq_number)
 void DeviceDriverHandler(void *CallbackRef)
 {
   int gicp2_sts, gicp3_sts, PL_PS_Group0;
-  int bit;
 
   // Determine which PL to PS line is asserted by reading GIC Proxy IRQ STS
   gicp2_sts    = (int) Xil_In32 (XLPD_SLCR_GICP2_IRQ_STS);
@@ -163,17 +167,8 @@ void DeviceDriverHandler(void *CallbackRef)
   /* Clear the IRQ bit */
   XGpio_DiscreteClear(&Gpio, GPIO_CHANNEL, PL_PS_Group0);
 
-  // Convert PL-to-PS IRQ line to GIC IRQ number
-  for ( bit = 0; bit <= 7; bit++ )
-    {
-      if ( (PL_PS_Group0 >> bit) & 0x1 )
-	{
-	  break;
-	}
-
-    }
-
-  PL_PS_Group0 = 121 + bit;
+  // Grab the callback data that was setup when this handler was connected
+  PL_PS_Group0 = *((int*)CallbackRef);
 
   // Disable the interrupt
   XScuGic_Disable(&InterruptController, PL_PS_Group0);
