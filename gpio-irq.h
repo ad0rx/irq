@@ -19,7 +19,7 @@
 #define INTC_DEVICE_INT_ID 121
 
 
-void gpio_irq_test(void);
+int gpio_irq_test(void);
 
 
 

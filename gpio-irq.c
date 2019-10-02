@@ -19,7 +19,7 @@ void DeviceDriverHandler(void *CallbackRef);
 int SetUpInterruptSystem(XScuGic *XScuGicInstancePtr);
 void trigger_irq (int irq_number);
 
-void gpio_irq_test(void)
+int gpio_irq_test(void)
 {
   int Status;
 
@@ -111,10 +111,7 @@ void gpio_irq_test(void)
 
     InterruptProcessed = 0;
   }
-
-
-
-
+  return XST_SUCCESS;
 }
 
 int SetUpInterruptSystem(XScuGic *XScuGicInstancePtr)
