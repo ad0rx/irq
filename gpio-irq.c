@@ -75,14 +75,14 @@ int gpio_irq_test(void)
    * handler. The handler determines which interrupt was asserted
    * during the isr.
    */
-  for (int i = 121; i <= 128; i++)
+  for (int i = 0; i <= 7; i++)
     {
 
 	  // Using the same handler body, but associating with different callback data
 	  // so that the handler will know which IRQ it is responsible for servicing
-      Status = XScuGic_Connect(&InterruptController, i,
+      Status = XScuGic_Connect(&InterruptController, isr_id[i],
 			       (Xil_ExceptionHandler)DeviceDriverHandler,
-			       (void*) &(isr_id[i-121]));
+			       (void*) &(isr_id[i]));
 
       if (Status != XST_SUCCESS) {
 	return XST_FAILURE;
@@ -96,9 +96,9 @@ int gpio_irq_test(void)
    * occur this loop will wait forever
    */
   InterruptProcessed = 0;
-  for (int i = 121; i <= 128; i++) {
+  for (int i = 0; i <= 7; i++) {
 
-    trigger_irq(i);
+    trigger_irq( isr_id[i] );
 
     /*
      * If the interrupt occurred which is indicated by the global
