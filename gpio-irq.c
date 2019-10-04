@@ -1,18 +1,49 @@
 #include "gpio-irq.h"
 
+/***************************** Variables ****************************/
+
+/* Container to hold global variables. This facilitates easier
+   debugging from XSCT
+ */
 struct {
   XGpio Gpio;
   XScuGic InterruptController;
   XScuGic_Config* GicConfig;
-} gGPIO_IRQ_GLOBALS;
+} gs_gpio_irq_globals;
 
-const int isr_id[8] = {121,122,123,124,125,126,127,128};
+/* Group the InterruptController and ISR ID into a container which
+   will be registerd with the ISR in the connect call. This way the
+   ISR will have easy access to necessary information.
+*/
+struct s_callback_ref_t {
+  XScuGic* InterruptController;
+  int isr_id;
+};
+
+const struct s_callback_ref_t ga_callback_refs[8] =
+  {
+    {&gs_gpio_irq_globals.InterruptController, 121},
+    {&gs_gpio_irq_globals.InterruptController, 122},
+    {&gs_gpio_irq_globals.InterruptController, 123},
+    {&gs_gpio_irq_globals.InterruptController, 124},
+    {&gs_gpio_irq_globals.InterruptController, 125},
+    {&gs_gpio_irq_globals.InterruptController, 126},
+    {&gs_gpio_irq_globals.InterruptController, 127},
+    {&gs_gpio_irq_globals.InterruptController, 128}
+  };
+
+/* These are the IRQ IDs which map to PL to PS IRQ signals
+ */
+//const int isr_id[8] = {121,122,123,124,125,126,127,128};
 
 /*
- * Create a shared variable to be used by the main thread of processing and
- * the interrupt processing
+ * Create a shared variable to be used by the main thread of
+ * processing and the interrupt processing. This variable is set to
+ * the ID of the IRQ in the ISR.
  */
 volatile static int InterruptProcessed = 0;
+
+/***************************** Prototypes ***************************/
 
 void DeviceDriverHandler(void *CallbackRef);
 int SetUpInterruptSystem(XScuGic *XScuGicInstancePtr);
@@ -23,14 +54,14 @@ int gpio_irq_test(void)
   int Status;
 
   /* Initialize the GPIO driver */
-  Status = XGpio_Initialize(&gGPIO_IRQ_GLOBALS.Gpio, AXI_GPIO_DEVICE_ID);
+  Status = XGpio_Initialize(&gs_gpio_irq_globals.Gpio, AXI_GPIO_DEVICE_ID);
   if (Status != XST_SUCCESS) {
     xil_printf("Gpio Initialization Failed\r\n");
     return XST_FAILURE;
   }
 
   // Make sure all IRQ request lines are low before configuring the GIC
-  XGpio_DiscreteClear(&gGPIO_IRQ_GLOBALS.Gpio, GPIO_CHANNEL, 0xFF);
+  XGpio_DiscreteClear(&gs_gpio_irq_globals.Gpio, GPIO_CHANNEL, 0xFF);
 
   // Configure GIC interrupts
 
@@ -38,13 +69,15 @@ int gpio_irq_test(void)
    * Initialize the interrupt controller driver so that it is ready to
    * use.
    */
-  gGPIO_IRQ_GLOBALS.GicConfig = XScuGic_LookupConfig(XPAR_SCUGIC_0_DEVICE_ID);
-  if (NULL == gGPIO_IRQ_GLOBALS.GicConfig) {
+  gs_gpio_irq_globals.GicConfig = XScuGic_LookupConfig(XPAR_SCUGIC_0_DEVICE_ID);
+  if (NULL == gs_gpio_irq_globals.GicConfig) {
     return XST_FAILURE;
   }
 
-  Status = XScuGic_CfgInitialize(&gGPIO_IRQ_GLOBALS.InterruptController, gGPIO_IRQ_GLOBALS.GicConfig,
-				 gGPIO_IRQ_GLOBALS.GicConfig->CpuBaseAddress);
+  Status = XScuGic_CfgInitialize(&gs_gpio_irq_globals.InterruptController,
+				 gs_gpio_irq_globals.GicConfig,
+				 gs_gpio_irq_globals.GicConfig->CpuBaseAddress
+				 );
   if (Status != XST_SUCCESS) {
     return XST_FAILURE;
   }
@@ -53,7 +86,7 @@ int gpio_irq_test(void)
    * Perform a self-test to ensure that the hardware was built
    * correctly
    */
-  Status = XScuGic_SelfTest(&gGPIO_IRQ_GLOBALS.InterruptController);
+  Status = XScuGic_SelfTest(&gs_gpio_irq_globals.InterruptController);
   if (Status != XST_SUCCESS) {
     return XST_FAILURE;
   }
@@ -61,7 +94,7 @@ int gpio_irq_test(void)
   /*
    * Setup the Interrupt System
    */
-  Status = SetUpInterruptSystem(&gGPIO_IRQ_GLOBALS.InterruptController);
+  Status = SetUpInterruptSystem(&gs_gpio_irq_globals.InterruptController);
   if (Status != XST_SUCCESS) {
     return XST_FAILURE;
   }
@@ -79,14 +112,15 @@ int gpio_irq_test(void)
 
       // Using the same handler body, but associating with different callback data
       // so that the handler will know which IRQ it is responsible for servicing
-      Status = XScuGic_Connect(&gGPIO_IRQ_GLOBALS.InterruptController, isr_id[i],
+      Status = XScuGic_Connect(&gs_gpio_irq_globals.InterruptController,
+			       ga_callback_refs[i].isr_id,
 			       (Xil_ExceptionHandler)DeviceDriverHandler,
-			       (void*) &isr_id[i]);
+			       (void*) &ga_callback_refs[i]
+			       );
 
       if (Status != XST_SUCCESS) {
 	return XST_FAILURE;
       }
-
 
     }
 
@@ -97,7 +131,7 @@ int gpio_irq_test(void)
   InterruptProcessed = 0;
   for (int i = 0; i <= 7; i++) {
 
-    trigger_irq ( isr_id[i] );
+    trigger_irq ( ga_callback_refs[i].isr_id );
 
     /*
      * If the interrupt occurred which is indicated by the global
@@ -142,16 +176,21 @@ void trigger_irq (int irq_number)
   /*
    * Enable the interrupt
    */
-  XScuGic_Enable(&gGPIO_IRQ_GLOBALS.InterruptController, irq_number);
+  XScuGic_Enable(&gs_gpio_irq_globals.InterruptController,
+		 irq_number);
 
   /* Set the IRQ to High */
-  XGpio_DiscreteSet(&gGPIO_IRQ_GLOBALS.Gpio, GPIO_CHANNEL, irq);
+  XGpio_DiscreteSet(&gs_gpio_irq_globals.Gpio,
+		    GPIO_CHANNEL,
+		    irq);
 
 }
 
 void DeviceDriverHandler(void *CallbackRef)
 {
   int gicp2_sts, gicp3_sts, PL_PS_Group0;
+
+  struct s_callback_ref_t* callback_data = (struct s_callback_ref_t*) CallbackRef;
 
   // Determine which PL to PS line is asserted by reading GIC Proxy IRQ STS
   gicp2_sts    = (int) Xil_In32 (XLPD_SLCR_GICP2_IRQ_STS);
@@ -161,13 +200,16 @@ void DeviceDriverHandler(void *CallbackRef)
   PL_PS_Group0 &= 0xFF;
 
   /* Clear the IRQ bit */
-  XGpio_DiscreteClear(&gGPIO_IRQ_GLOBALS.Gpio, GPIO_CHANNEL, PL_PS_Group0);
+  XGpio_DiscreteClear(&gs_gpio_irq_globals.Gpio,
+		      GPIO_CHANNEL,
+		      PL_PS_Group0);
 
   // Grab the callback data that was setup when this handler was connected
-  PL_PS_Group0 = *((int*)CallbackRef);
+  PL_PS_Group0 = callback_data->isr_id;
 
   // Disable the interrupt
-  XScuGic_Disable(&gGPIO_IRQ_GLOBALS.InterruptController, PL_PS_Group0);
+  XScuGic_Disable(&gs_gpio_irq_globals.InterruptController,
+		  PL_PS_Group0);
 
   // Clear the STS bits
   Xil_Out32 (XLPD_SLCR_GICP2_IRQ_STS, gicp2_sts);
