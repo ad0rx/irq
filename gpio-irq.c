@@ -20,6 +20,9 @@ struct s_callback_ref_t {
   int isr_id;
 };
 
+/* Create an instance and initialize callback reference data
+   the isr_id corresponds to PL to PS IRQ numbers.
+ */
 const struct s_callback_ref_t ga_callback_refs[8] =
   {
     {&gs_gpio_irq_globals.InterruptController, 121},
@@ -31,10 +34,6 @@ const struct s_callback_ref_t ga_callback_refs[8] =
     {&gs_gpio_irq_globals.InterruptController, 127},
     {&gs_gpio_irq_globals.InterruptController, 128}
   };
-
-/* These are the IRQ IDs which map to PL to PS IRQ signals
- */
-//const int isr_id[8] = {121,122,123,124,125,126,127,128};
 
 /*
  * Create a shared variable to be used by the main thread of
@@ -179,7 +178,7 @@ void trigger_irq (int irq_number)
   XScuGic_Enable(&gs_gpio_irq_globals.InterruptController,
 		 irq_number);
 
-  /* Set the IRQ to High */
+  /* Set the IRQ line High */
   XGpio_DiscreteSet(&gs_gpio_irq_globals.Gpio,
 		    GPIO_CHANNEL,
 		    irq);
@@ -199,7 +198,7 @@ void DeviceDriverHandler(void *CallbackRef)
   PL_PS_Group0 |= (gicp3_sts << 7);
   PL_PS_Group0 &= 0xFF;
 
-  /* Clear the IRQ bit */
+  /* Clear the IRQ line */
   XGpio_DiscreteClear(&gs_gpio_irq_globals.Gpio,
 		      GPIO_CHANNEL,
 		      PL_PS_Group0);
@@ -219,5 +218,4 @@ void DeviceDriverHandler(void *CallbackRef)
    * Indicate the interrupt has been processed using a shared variable
    */
   InterruptProcessed = PL_PS_Group0;
-
 }
