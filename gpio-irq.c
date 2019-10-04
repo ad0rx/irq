@@ -4,8 +4,9 @@ struct {
   XGpio Gpio;
   XScuGic InterruptController;
   XScuGic_Config* GicConfig;
-  int isr_id[8];
-} gGPIO_IRQ_GLOBALS = { .isr_id = {121,122,123,124,125,126,127,128} };
+} gGPIO_IRQ_GLOBALS;
+
+const int isr_id[8] = {121,122,123,124,125,126,127,128};
 
 /*
  * Create a shared variable to be used by the main thread of processing and
@@ -78,9 +79,9 @@ int gpio_irq_test(void)
 
       // Using the same handler body, but associating with different callback data
       // so that the handler will know which IRQ it is responsible for servicing
-      Status = XScuGic_Connect(&gGPIO_IRQ_GLOBALS.InterruptController, gGPIO_IRQ_GLOBALS.isr_id[i],
+      Status = XScuGic_Connect(&gGPIO_IRQ_GLOBALS.InterruptController, isr_id[i],
 			       (Xil_ExceptionHandler)DeviceDriverHandler,
-			       (void*) &(gGPIO_IRQ_GLOBALS.isr_id[i]));
+			       (void*) &isr_id[i]);
 
       if (Status != XST_SUCCESS) {
 	return XST_FAILURE;
@@ -96,7 +97,7 @@ int gpio_irq_test(void)
   InterruptProcessed = 0;
   for (int i = 0; i <= 7; i++) {
 
-    trigger_irq( gGPIO_IRQ_GLOBALS.isr_id[i] );
+    trigger_irq ( isr_id[i] );
 
     /*
      * If the interrupt occurred which is indicated by the global
